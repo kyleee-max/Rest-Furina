@@ -1,104 +1,58 @@
-import { logRequest } from '../../../lib/logger'
 import axios from 'axios'
 
-export default async function handler(req, res) {
-  logRequest(req)
+// creator: KaelTzy
 
+const fx = n => Intl.NumberFormat('id-ID', { notation: 'compact', compactDisplay: 'short' }).format(n || 0) + ` (${n || 0})`
+
+const rel = (timestamp) => {
+  if (!timestamp || timestamp === 0) return '-'
+  const diff = Date.now() - (timestamp * 1000)
+  const sec = Math.floor(diff / 1000), min = Math.floor(sec / 60),
+        hour = Math.floor(min / 60), day = Math.floor(hour / 24)
+  if (day > 0) return `${day} hari lalu`
+  if (hour > 0) return `${hour} jam lalu`
+  if (min > 0) return `${min} menit lalu`
+  return 'Baru saja'
+}
+
+export default async function handler(req, res) {
   const { username } = req.query
-  if (!username) return res.status(400).json({ success: false, message: 'Parameter username wajib diisi.' })
+  if (!username) return res.status(400).json({ success: false, creator: 'KaelTzy', message: 'Parameter username wajib diisi.' })
 
   try {
-    // Fetch profile info + recent videos secara paralel
-    const [profileRes, videosRes] = await Promise.all([
-      axios.get(`https://www.tikwm.com/api/user/info?unique_id=${username}`),
-      axios.get(`https://www.tikwm.com/api/user/posts?unique_id=${username}&count=10&cursor=0`)
-    ])
-
-    const profileData = profileRes.data
-    const videosData = videosRes.data
-
-    if (!profileData || profileData.code !== 0) {
-      return res.status(400).json({ success: false, message: 'User tidak ditemukan.' })
+    const response = await axios.get(`https://www.tikwm.com/api/user/info?unique_id=${username}`)
+    if (response.data.code !== 0) {
+      return res.status(400).json({ success: false, creator: 'KaelTzy', message: response.data.msg || 'Username tidak ditemukan.' })
     }
 
-    const u = profileData.data?.user
-    const s = profileData.data?.stats
-
-    // Format tanggal akun dibuat
-    const createdAt = u?.createTime
-      ? new Date(u.createTime * 1000).toISOString().slice(0, 10)
-      : null
-
-    // Recent videos
-    const videos = (videosData?.code === 0 && videosData?.data?.videos) 
-      ? videosData.data.videos.map(v => ({
-          id: v.id,
-          title: v.title || v.desc || null,
-          cover: v.cover,
-          playUrl: v.play,
-          duration: v.duration,
-          ratio: v.ratio,
-          createdAt: v.create_time
-            ? new Date(v.create_time * 1000).toISOString().slice(0, 10)
-            : null,
-          stats: {
-            plays: v.play_count,
-            likes: v.digg_count,
-            comments: v.comment_count,
-            shares: v.share_count,
-            downloads: v.download_count,
-          }
-        }))
-      : []
+    const { user: u, stats } = response.data.data
 
     return res.status(200).json({
       success: true,
+      creator: 'KaelTzy',
       data: {
-        // ── Identitas ──
-        userId: u?.id,
-        secUid: u?.secUid,
-        username: u?.uniqueId,
-        nickname: u?.nickname,
-
-        // ── Profil ──
-        bio: u?.signature,
-        bioLink: u?.bioLink?.link || null,
-        avatar: u?.avatarLarger,
-        avatarThumb: u?.avatarThumb,
-
-        // ── Status akun ──
-        verified: u?.verified ?? false,
-        privateAccount: u?.privateAccount ?? false,
-        openFavorite: u?.openFavorite ?? false,
-        commentSetting: u?.commentSetting ?? null,   // 0=everyone, 1=friends, 2=off
-        duetSetting: u?.duetSetting ?? null,
-        stitchSetting: u?.stitchSetting ?? null,
-
-        // ── Info regional ──
-        region: u?.region || null,
-        language: u?.language || null,
-
-        // ── Live ──
-        isLive: u?.roomId ? true : false,
-        roomId: u?.roomId || null,
-
-        // ── Tanggal akun dibuat ──
-        accountCreatedAt: createdAt,
-
-        // ── Statistik ──
-        stats: {
-          followers: s?.followerCount ?? 0,
-          following: s?.followingCount ?? 0,
-          likes: s?.heartCount ?? 0,
-          videos: s?.videoCount ?? 0,
-          friends: s?.friendCount ?? 0,
+        id: u.id,
+        nickname: u.nickname || '-',
+        username: u.uniqueId,
+        bio: u.signature || '-',
+        instagram: u.ins_id || '-',
+        avatar: {
+          thumb: u.avatarThumb,
+          medium: u.avatarMedium,
+          large: u.avatarLarger,
         },
-
-        // ── Video terbaru (10 video) ──
-        recentVideos: videos,
+        stats: {
+          followers: fx(stats.followerCount),
+          following: fx(stats.followingCount),
+          likes: fx(stats.heart),
+          videos: fx(stats.videoCount),
+        },
+        verified: u.verified,
+        private: u.secret,
+        createdAt: rel(u.createTime),
       },
     })
   } catch (err) {
-    return res.status(500).json({ success: false, message: 'Server error: ' + err.message })
+    return res.status(500).json({ success: false, creator: 'KaelTzy', message: 'Server error: ' + err.message })
   }
 }

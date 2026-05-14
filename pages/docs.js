@@ -108,7 +108,7 @@ export default function Docs() {
   const getUrl = () => {
     if (!modal) return ''
     const q = modal.params.map(p => `${p.key}=${encodeURIComponent(params[p.key] || p.placeholder || '')}`).join('&')
-    return `https://api.furina-apis.web.id${modal.path}?${q}`
+    return `https://api.furina.my.id${modal.path}?${q}`
   }
 
   const sendRequest = async () => {
